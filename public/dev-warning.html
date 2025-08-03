@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Development Warning - Frontend Not Found</title>
+    <style>
+      body {
+        font-family: Arial, sans-serif;
+        line-height: 1.6;
+        margin: 40px;
+        background-color: #f4f4f4;
+        color: #333;
+        text-align: center;
+      }
+      .container {
+        max-width: 800px;
+        margin: 0 auto;
+        padding: 20px;
+        background-color: #fff;
+        border-radius: 8px;
+        box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+      }
+      h1 {
+        color: #d9534f; /* Red-ish for warning */
+        margin-bottom: 20px;
+      }
+      code {
+        background-color: #eee;
+        padding: 2px 4px;
+        border-radius: 4px;
+        font-family: "Courier New", Courier, monospace;
+        color: #c7254e;
+      }
+      pre {
+        background-color: #333;
+        color: #eee;
+        padding: 15px;
+        border-radius: 5px;
+        overflow-x: auto;
+        text-align: left;
+        white-space: pre-wrap;
+        word-wrap: break-word;
+      }
+      a {
+        color: #007bff;
+        text-decoration: none;
+      }
+      a:hover {
+        text-decoration: underline;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <h1>Development Warning!</h1>
+      <p>
+        It looks like the backend server is running correctly on port 3000, but
+        the frontend application build (`dist` directory) was not found at
+        startup.
+      </p>
+      <p>
+        This page is being served as a placeholder. To work on the frontend, you
+        need to start Parcel's development server in a separate terminal.
+      </p>
+
+      <h2>To start the frontend development server:</h2>
+      <p>
+        Open a new terminal window in the project's root directory
+        (`~/snhu/cs499/project/`) and run:
+      </p>
+      <pre><code>parcel serve public/index.html --open --port 1234</code></pre>
+      <p>
+        Once Parcel starts, your browser should automatically open the frontend
+        application at:
+      </p>
+      <p>
+        <a href="http://localhost:1234/" target="_blank"
+          >http://localhost:1234/</a
+        >
+      </p>
+
+      <p>
+        If you intended to build for production, please run
+        <code>npm run build</code> first.
+      </p>
+    </div>
+  </body>
+</html>
