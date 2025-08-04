@@ -1,0 +1,21 @@
+# Ignore the build output
+client/dist/
+server/dist/
+
+# Node modules
+node_modules/
+client/node_modules/
+server/node_modules/
+
+# Environment variables
+.env
+server/.env
+client/.env
+
+# Parcel cache
+client/.parcel-cache/
+
+dist/
+dist-server/
+
+week1/
