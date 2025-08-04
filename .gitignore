@@ -21,3 +21,6 @@ dist-server/
 week1/
 original/
 week3/
+
+server.crt
+server.key
