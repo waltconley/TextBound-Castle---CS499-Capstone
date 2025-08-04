@@ -1,0 +1,124 @@
+<!doctype html>
+<html>
+  <head>
+    <title>TextBound Castle Crawl</title>
+    <link rel="stylesheet" href="https://unpkg.com/xterm@5.3.0/css/xterm.css" />
+    <style>
+      html,
+      body {
+        margin: 0;
+        padding: 0;
+        height: 100%;
+        font-family: sans-serif;
+        background-color: #282c34;
+        color: #abb2bf;
+        overflow: hidden;
+      }
+
+      #app-container {
+        display: flex;
+        height: 100%;
+      }
+
+      #terminal-section {
+        flex-grow: 1;
+        height: 100%;
+        display: flex;
+        flex-direction: column;
+        padding: 10px;
+        box-sizing: border-box;
+      }
+
+      #terminal-container {
+        flex-grow: 1;
+        border: 1px solid #61afef;
+        padding: 10px;
+        box-shadow: 0 0 10px rgba(0, 0, 0, 0.5);
+      }
+
+      #directions-section {
+        width: 20%;
+        background-color: #333842;
+        padding: 20px;
+        box-sizing: border-box;
+        overflow-y: auto;
+        border-left: 1px solid #61afef;
+      }
+
+      #directions-section h2 {
+        color: #61afef;
+        margin-top: 0;
+      }
+
+      #directions-section ul {
+        list-style: none;
+        padding: 0;
+      }
+
+      #directions-section li {
+        margin-bottom: 10px;
+      }
+
+      #directions-section code {
+        background-color: #444;
+        padding: 2px 4px;
+        border-radius: 3px;
+        font-family: monospace;
+        color: #c678dd;
+      }
+      .completed {
+        text-decoration: line-through;
+        color: #777;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="app-container">
+      <div id="terminal-section">
+        <div id="terminal-container"></div>
+      </div>
+      <div id="updates-section">
+        <h2>TextBound Castle Crawler Updates</h2>
+        <h3>
+          <span class="completed">1. Software Engineering and Design</span>
+          Completed!
+        </h3>
+        <ul>
+          <li class="completed">
+            Refactor game to a client/server architecture (Node.js/Express,
+            WebSockets, Xterm.js frontend).
+          </li>
+          <li class="completed">
+            Eliminate global variables for state management.
+          </li>
+          <li class="completed">
+            Improve input validation and error handling.
+          </li>
+        </ul>
+        <h3>2. Data Structures and Algorithms</h3>
+        <ul>
+          <li>Convert game map to a graph data structure.</li>
+          <li>Implement A* pathfinding for advanced navigation.</li>
+          <li>
+            Refactor player inventories to use hash tables for efficiency.
+          </li>
+        </ul>
+        <h3>3. Database Integration</h3>
+        <ul>
+          <li>Transition game state to a PostgreSQL relational database.</li>
+          <li>
+            Implement a normalized schema for players, rooms, items, and
+            inventories.
+          </li>
+          <li>Utilize an ORM for seamless data interaction.</li>
+          <li>
+            Introduce connection pooling and transaction management for
+            robustness.
+          </li>
+        </ul>
+      </div>
+    </div>
+
+    <script src="script.ts" type="module"></script>
+  </body>
+</html>
