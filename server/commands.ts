@@ -12,7 +12,9 @@
  * @date July 17, 2025 - Initial creation
  * @date July 18, 2025 - Updated with game phase logic and explicit output handling
  * @date July 28, 2025 - Added path command. Moved types/interfaces to types.ts
- * @version 1.0.2
+ * @date August 1, 2025 - Added game phase to support level transition
+ *                      - Added save game state during movement
+ * @version 1.0.3
  */
 
 import { WebSocket } from "ws";
@@ -23,15 +25,20 @@ import type {
   Result,
   PotentialPathingError,
 } from "./types.ts";
+import { tryCatch, isSuccess } from "./types.ts";
 import { findPath } from "./pathfinding.ts";
 import {
   getNewState,
   pickup,
   showStatus,
-  getHelp,
-  getIntro,
+  //getHelp,
   checkGameOver,
+  saveGameState,
+  createNewGameState,
 } from "./game.ts";
+import { db } from "./db/index.ts";
+import { levels } from "./db/schema.ts";
+import { eq } from "drizzle-orm";
 
 // Dictionary of commands
 const commands: { [key: string]: Command } = {
@@ -154,7 +161,7 @@ const commands: { [key: string]: Command } = {
         gameState.updateMessage = "You need a direction! (ex. move north)";
       }
 
-      checkGameOver(gameState); // Check after moving
+      await checkGameOver(gameState); // Check after moving
 
       let commandOutput: string;
 
@@ -195,8 +202,6 @@ const commands: { [key: string]: Command } = {
         gameState.updateMessage =
           "You can't pick up thin air! Include the item name!";
       }
-
-      checkGameOver(gameState); // Check after picking up item
 
       let commandOutput: string;
 
@@ -245,7 +250,7 @@ const commands: { [key: string]: Command } = {
     description: "Exit the game.",
     execute: async (_args: string[], _ws: WebSocket, gameState: GameState) => {
       gameState.currentNode = "Exit"; // Trigger game over condition in game.ts
-      checkGameOver(gameState); // This will set game.gameOver = true and update message
+      await checkGameOver(gameState); // This will set game.gameOver = true and update message
 
       let commandOutput: string;
 
@@ -292,14 +297,16 @@ export async function handleCommand(
   inputCommand: string,
   ws: WebSocket,
   gameState: GameState,
+  userId: number,
+  _username: string,
 ): Promise<{ output: string; shouldCloseWs?: boolean }> {
   const trimmedInput = inputCommand.trim().toLowerCase(); // Always trim and lowercase early for commands
 
-  let output = "";
+  let output: string = "";
   let shouldCloseWs = false;
 
   // Debugging Purposes
-  let begin_phase = gameState.gamePhase;
+  //let begin_phase = gameState.gamePhase;
 
   gameState.updateMessage = "";
 
@@ -308,9 +315,11 @@ export async function handleCommand(
       if (trimmedInput === "") {
         // User pressed Enter after intro
         gameState.gamePhase = "instruct"; // Transition to instructions phase
-        output = getHelp(gameState);
+        ({ output } = await commands["help"].execute([], ws, gameState));
       } else {
-        output = getIntro();
+        // output = getIntro();
+        output = gameState.storyline;
+        console.info(gameState.storyline);
       }
       break;
 
@@ -329,7 +338,7 @@ export async function handleCommand(
         }
       } else {
         // Typed something other than Enter during instructions
-        output = getHelp(gameState);
+        ({ output } = await commands["help"].execute([], ws, gameState));
       }
       break;
 
@@ -349,9 +358,6 @@ export async function handleCommand(
         } else {
           output = statusResult.data;
         }
-      } else {
-        // Typed something other than Enter during viewing help
-        output = getHelp(gameState); // Re-display instructions
       }
       break;
 
@@ -385,6 +391,7 @@ export async function handleCommand(
         }
 
         const result = await commandExecutor.execute(args, ws, gameState);
+        saveGameState(userId, gameState);
         output = result.output;
         shouldCloseWs = result.shouldCloseWs ?? false;
       } else {
@@ -403,6 +410,66 @@ export async function handleCommand(
       }
       break;
 
+    case "level_complete":
+      if (trimmedInput === "") {
+        const nextLevelId = gameState.level_num + 1;
+
+        // try to pull levelId + 1
+        const levelQueryResult = await tryCatch(
+          db
+            .select({ name: levels.name })
+            .from(levels)
+            .where(eq(levels.id, nextLevelId)),
+        );
+
+        // TypeScript needs help so I wrote a helper func
+        if (isSuccess(levelQueryResult)) {
+          if (levelQueryResult.data.length === 0) {
+            output = "You have completed the entire game! Congratulations!";
+            gameState.gameOver = true;
+          }
+
+          // A next level was found. Create a new game state for it.
+          const nextLevelName = levelQueryResult.data[0].name;
+          const newGameStateResult = await createNewGameState(nextLevelName);
+
+          if (newGameStateResult.error) {
+            console.error(
+              "Failed to load next level:",
+              newGameStateResult.error,
+            );
+            output = `Error loading next level: ${newGameStateResult.error.message}`;
+            gameState.gameOver = true;
+            break;
+          }
+
+          if (newGameStateResult.data === null) {
+            console.error("tryCatch failed loading new level:", nextLevelName);
+            output = `tryCatch failed loading new level: ${nextLevelName}`;
+            gameState.gameOver = true;
+            break;
+          }
+          // Apply the new game state to the current state object.
+          Object.assign(gameState, newGameStateResult.data);
+          gameState.gameOver = false; // Ensure gameOver is false
+          gameState.gamePhase = "intro"; // Reset to intro phase
+          output = gameState.storyline;
+        } else {
+          // Inside this block, it knows levelQueryResult.error is not null.
+          console.error(
+            "Database query failed for next level:",
+            levelQueryResult.error.message,
+          );
+          output = "An error occurred while loading the next level.";
+          gameState.gameOver = true;
+          break;
+        }
+      } else {
+        // User typed something other than Enter. Ensure storyline displayed.
+        output = gameState.storyline;
+      }
+      break;
+
     default:
       // This case should ideally never be hit if all phases are handled
       console.error(`Unknown game phase: ${gameState.gamePhase}`);
@@ -412,7 +479,7 @@ export async function handleCommand(
   }
 
   // Debgging, beginning phase, input: " ", ending phase for every input
-  console.log(`${begin_phase} \t "${trimmedInput}" \t ${gameState.gamePhase}`);
+  // console.log(`${begin_phase} \t "${trimmedInput}" \t ${gameState.gamePhase}`);
 
   // Prepend the clear screen ANSI escape codes
   if (!shouldCloseWs) {

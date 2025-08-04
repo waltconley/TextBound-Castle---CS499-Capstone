@@ -12,6 +12,11 @@
  *                     - Added Result<T, E> type for explicit error handling
  *                     - Added tryCatch utility function to wrap promises into Result types
  *                     - Added Errors.ts, and union group in this file
+ * @date August 1, 2025
+                       - Adjusted types to support persistent state transitions
+                       - Added isSuccess() to clean up some logic, just forces TS to recognize Success type.
+ *                     - Added LevelStatus to strengthen level completion logic.
+ *                     - Added ConnectionState and separated from gamePhase for authentication
  * @version 1.0.0
  */
 import { WebSocket } from "ws";
@@ -71,6 +76,14 @@ export async function tryCatch<T, E = Error>(
   }
 }
 
+/** This function tells the compiler that if it returns `true`,
+ * the `result` object is guaranteed to be a `Success`.
+ * I hate this language
+ */
+export function isSuccess<T, E>(result: Result<T, E>): result is Success<T> {
+  return result.error === null;
+}
+
 /**
  * A union type representing all possible specific errors that can be
  * returned by pathfinding operations within the game. This centralizes
@@ -128,6 +141,14 @@ export interface LevelNode {
 }
 
 /**
+ * Quick wrapper to encompass level status for gameOver
+ */
+export interface LevelStatus {
+  boss: boolean;
+  level_beat: boolean;
+}
+
+/**
  * Represents the entire castle structure, mapping room names to Node objects.
  */
 export type Level = Map<string, LevelNode>;
@@ -138,6 +159,8 @@ export type Level = Map<string, LevelNode>;
  * and the current game situation.
  */
 export interface GameState {
+  // Updated this interface to hold level #
+  level_num: number;
   // The unique identifier of the room the player is currently in.
   currentNode: string;
   // A map of items the player has collected, where key is item name and value is quantity.
@@ -149,10 +172,45 @@ export interface GameState {
   // Each player has their own mutable copy of the level
   playerLevel: Level;
   // The current phase of the game, used to properly route player input
-  gamePhase: "intro" | "instruct" | "playing" | "help";
+  gamePhase: "intro" | "instruct" | "playing" | "help" | "level_complete";
   // A message to be displayed to the player, often reflecting the result of their last action.
   updateMessage: string;
+  // msg for successfully completing level
+  complete_msg: string;
+  // Since we have multiple levels, we need to store the storyline
+  storyline: string;
 }
+
+/**
+ * A union type representing the connection state of a client.
+ * This is used to control the flow of commands and logic based on whether
+ * a user is authenticated or in a game session.
+ */
+export type ConnectionState =
+  | { state: "guest" }
+  | {
+      state: "register";
+      registerStep:
+        | "awaiting_username"
+        | "awaiting_password"
+        | "verify_password";
+      tempUsername?: string;
+      tempPassword?: string;
+    }
+  | {
+      state: "login";
+      loginStep: "awaiting_username" | "awaiting_password";
+      tempUsername?: string;
+    }
+  | {
+      state: "authenticated";
+      user: { id: number; username: string };
+    }
+  | {
+      state: "game_session";
+      user: { id: number; username: string };
+      gameState: GameState;
+    };
 
 /**
  * Result of executing a command.

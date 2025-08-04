@@ -51,15 +51,14 @@ const DirectionSynonyms: Map<string, CanonDir> = new Map<string, CanonDir>([
   ["d", "south"],
 ]);
 
-/* * Normalizes a player's raw direction input into a canonical direction string.
+/** Normalizes a player's raw direction input into a canonical direction string.
  * Returns null if the input is not recognized.
  */
 export function normalizeDirectionInput(input: string): CanonDir | null {
   return DirectionSynonyms.get(input.toLowerCase()) || null;
 }
 
-// --- Helper for building the full exits map for Node objects ---
-
+// Helper for building the full exits map for Node objects
 /**
  * Defines additional synonyms for canonical directions that will be added to the exits map.
  * Key: CanonicalDirection (lowercase)
@@ -74,10 +73,13 @@ const ExitSynonyms: Map<CanonDir, ExitKey[]> = new Map<CanonDir, ExitKey[]>([
 ]);
 
 /**
- * Builds a comprehensive exits Map for a Node, including canonical directions and their specified synonyms.
- * This is used during initial Castle creation to populate the Node.exits map.
- * @param canonExits A Map where keys are CanonDir (lowercase) and values are target room names.
- * @returns A Map<ExitKey, string> containing all keys (canonical + synonyms) mapped to the room names.
+ * Builds a comprehensive exits Map for a Node, including
+ * canonical directions and their specified synonyms.
+ * This is used during initial level creation to populate the
+ * Node.exits map.
+ *
+ * @param canonExits A Map where keys are CanonDir and values are neighbor nodes.
+ * @returns A Map<ExitKey, string> containing all direction + synonyms keys mapped to nodes.
  */
 export function buildExits(
   canonExits: Map<CanonDir, string>,
@@ -99,13 +101,13 @@ export function buildExits(
 
 /**
  * Infers (x,y) coordinates for nodes in the level based on canonical exits,
- * Assigns the specified `startNodeName` to (0,0) as a reference point.
- * Modifies the LevelNode objects in the provided `level` Map in place
- * by setting their `x` and `y` properties.
+ * Assigns the specified startNodeName to (0,0) as a reference point.
+ * Modifies the LevelNode objects in the provided level Map in place
+ * by setting their x and y properties.
  *
- * @param level The Level map (Map<string, LevelNode>) to infer coordinates for.
+ * @param level The Level map to infer coordinates for.
  * @param startNodeName The name of the node to assign (0,0) coordinates to.
- * @returns A Set of node names that could not be reached and thus not placed (disconnected parts of the graph).
+ * @returns A Set of unreachable nodes in level (disconnected parts of the graph).
  */
 export function inferNodeCoordinates(
   level: Level,
@@ -116,7 +118,6 @@ export function inferNodeCoordinates(
   // Initially, all nodes are unplaced. We'll remove them as we place them.
   const unplacedNodes = new Set(level.keys());
 
-  // 1. Initialize the starting node
   if (level.has(startNodeName)) {
     assignedCoords.set(startNodeName, { x: 0, y: 0 });
     queue.push({ nodeName: startNodeName, x: 0, y: 0 });
@@ -141,13 +142,12 @@ export function inferNodeCoordinates(
       continue;
     }
 
-    // 2. "Pin" the coordinates to the actual LevelNode object
     currentNode.x = x;
     currentNode.y = y;
 
-    // 3. Explore neighbors
+    // Explore neighbor nodes
     for (const [dirKey, targetNodeName] of currentNode.exits.entries()) {
-      // We only use canonical directions for coordinate inference
+      // Only use canonical directions for coordinate inference
       const canonDir = dirKey as CanonDir;
 
       if (DIR_TO_COORD_DELTA.has(canonDir)) {
@@ -159,7 +159,7 @@ export function inferNodeCoordinates(
         if (!assignedCoords.has(targetNodeName)) {
           assignedCoords.set(targetNodeName, { x: newX, y: newY });
           queue.push({ nodeName: targetNodeName, x: newX, y: newY });
-          unplacedNodes.delete(targetNodeName); // Mark as placed
+          unplacedNodes.delete(targetNodeName);
         } else {
           // IMPORTANT: Consistency check for graphs that might not be perfect grids
           const existingCoords = assignedCoords.get(targetNodeName)!;

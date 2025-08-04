@@ -11,14 +11,13 @@
  * @date July 23, 2025 - Implemented A* (Dijkstra's) algorithm for weighted pathfinding
  * @date July 24, 2025 - Modified to return detailed path segments including directions
  * @date July 25, 2025 - Added Heuristic func to make it truly A*
+ * @date August 1, 2025 - Cleaned up comments, couldn't get links working in nvim
  * @version 1.0.0
  */
 
 // Import necessary types from types.ts
 import type {
   Result,
-  Success,
-  Failure,
   PotentialPathingError,
   Level,
   LevelNode,
@@ -94,9 +93,9 @@ function getHeuristic(
  * @param level     The entire level
  * @param sNode     The starting node/room
  * @param eNode     The target node/room
- * @returns A {@link Result} object:
- * - {@link Success} containing an array of {@link PathSegment} on successful pathfinding.
- * - {@link Failure} containing a {@link PotentialPathingError} if the path cannot be found
+ * @returns A Result object:
+ * - Success containing an array of PathSegment on successful pathfinding.
+ * - Failure containing a PotentialPathingError if the path cannot be found
  * or if input nodes are invalid.
  */
 export function findPath(

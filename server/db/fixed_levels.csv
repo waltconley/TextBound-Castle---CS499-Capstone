@@ -1,0 +1,32 @@
+"id","name","description","storyline","map_data","complete_msg"
+"1","Yugi's Shadow Realm","The main overworld of the Shadow Realm.","STORYLINE
+---------------------------
+Yugi has been banished to the Shadow Realm. Kaiba partnered with
+the evil Maximillion Pegasus and was given the “Soul Prison” card
+to trap Yugi during their last duel. Luckily, Yugi had on his
+Millennium Puzzle necklace with him when he was trapped, so Yami
+is there in spirit, guiding Yugi on how to get out of the Shadow Realm.
+Bad news, the necklace fell off when Yugi was banished. Yami's
+instructions are simple, gather for Exodia and the necklace to break
+out of the Shadow Realm. However, beware of Necross, the zombie
+guardian of the Shadow Realm. Your mission is daunting, break into
+the Castle of Necross’ and find all the Exodia pieces and the Millennium
+Puzzle. Don't forget to avoid Necross! Once you have all the cards and
+your necklace, find and defeat Necross to exit the Shadow Realm!
+
+Press enter to continue to instructions.","{""Barbican"": {""name"": ""Barbican"", ""exits"": {""east"": ""Kitchen"", ""south"": ""Gathering Hall"", ""west"": ""Outer Ward""}, ""item"": null}, ""Kitchen"": {""name"": ""Kitchen"", ""exits"": {""west"": ""Barbican""}, ""item"": ""Right Leg Of The Forbidden One""}, ""Gathering Hall"": {""name"": ""Gathering Hall"", ""exits"": {""north"": ""Barbican"", ""east"": ""Keep""}, ""item"": ""Left Arm Of The Forbidden One""}, ""Keep"": {""name"": ""Keep"", ""exits"": {""west"": ""Gathering Hall""}, ""item"": ""Millennium Puzzle Necklace""}, ""Outer Ward"": {""name"": ""Outer Ward"", ""exits"": {""east"": ""Barbican"", ""south"": ""Dungeons"", ""west"": ""Stables""}, ""item"": ""Right Arm Of The Forbidden One""}, ""Dungeons"": {""name"": ""Dungeons"", ""exits"": {""north"": ""Outer Ward"", ""south"": ""Catacombs""}, ""item"": ""Head Of Exodia""}, ""Catacombs"": {""name"": ""Catacombs"", ""exits"": {""north"": ""Dungeons""}, ""boss"": ""Necross"", ""item"": ""Your physical body""}, ""Stables"": {""name"": ""Stables"", ""exits"": {""east"": ""Outer Ward""}, ""item"": ""Left Leg Of The Forbidden One""}, ""Exit"": {""name"": ""Exit"", ""exits"": {}, ""item"": null}}","You crushed Necross! Time to visit your other foes..."
+"2","Kaiba's Mansion","Kaiba's Castle 2nd lvl","STORYLINE
+---------------------------
+You did it! You've successfully defeated Necross and escaped the Shadow Realm,
+but your celebration is cut short. The moment you cross back to reality, you find
+yourself in the familiar halls of Kaiba's Castle. It seems Kaiba’s partnership with
+Pegasus was merely a distraction. He has stolen your most powerful cards and
+locked them away in his castle to prepare for one last duel. Now, to retrieve your
+deck, you must journey through the Grand Hall, the Armory, the Study, the Servants'
+Quarters, the Library, and a Secret Passageway all while a ghostly voice that sounds
+like Kaiba mocks you from the shadows. To have any chance of victory, you must
+retrieve the Blue-Eyes White Dragon Card, Dark Magician, Monster Reborn,
+Polymerization, Pot of Greed, and Change of Heart cards. Once you have reclaimed
+your deck, find Kaiba in his lair and duel for your freedom!
+
+Press enter to continue to instructions.","{""grand_hall"": {""name"": ""The Grand Hall"", ""exits"": {""north"": ""study"", ""south"": ""dungeon"", ""west"": ""armory"", ""east"": ""servants_quarters""}, ""item"": null, ""boss"": false, ""size"": 1}, ""study"": {""name"": ""Kaiba's Study"", ""exits"": {""south"": ""grand_hall"", ""east"": ""library""}, ""item"": ""Dark Magician"", ""boss"": false, ""size"": 1}, ""library"": {""name"": ""The Forbidden Library"", ""exits"": {""west"": ""study"", ""north"": ""kaibas_lair"", ""east"": ""secret_passageway""}, ""item"": ""Monster Reborn"", ""boss"": false, ""size"": 1}, ""dungeon"": {""name"": ""The Castle Dungeon"", ""exits"": {""north"": ""grand_hall""}, ""item"": ""Polymerization"", ""boss"": false, ""size"": 1}, ""armory"": {""name"": ""The Armory"", ""exits"": {""east"": ""grand_hall""}, ""item"": ""Blue-Eyes White Dragon Card"", ""boss"": false, ""size"": 1}, ""servants_quarters"": {""name"": ""The Servants' Quarters"", ""exits"": {""west"": ""grand_hall""}, ""item"": ""Pot of Greed"", ""boss"": false, ""size"": 1}, ""secret_passageway"": {""name"": ""The Secret Passageway"", ""exits"": {""west"": ""library""}, ""item"": ""Change of Heart"", ""boss"": false, ""size"": 1}, ""kaibas_lair"": {""name"": ""Kaiba's Lair"", ""exits"": {""south"": ""library""}, ""item"": null, ""boss"": true, ""size"": 1}}","You crushed Kaiba! Who's next? Pegasus?!"

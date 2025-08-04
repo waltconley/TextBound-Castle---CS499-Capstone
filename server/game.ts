@@ -14,8 +14,17 @@
  * @date July 25, 2025:
  *    - Moved types/interfaces to their own file (types.ts)
  *    - Infers coordinate system based on level layout (for pathfinding)
- * @version 1.0.3
+ * @date August 1, 2025:
+ *    - Refined the game ending logic to account for other levels
+ *    - Removed the getIntro() and getHelp() functions in favor of dynamic data
+ *    - Refined game state to account for persistent data
+ * @version 1.0.4
  */
+
+import { db } from "./db/index.ts";
+import { levels, gameStates } from "./db/schema.ts";
+import { eq } from "drizzle-orm";
+import type { InferInsertModel } from "drizzle-orm";
 
 import type {
   LevelNode,
@@ -24,98 +33,218 @@ import type {
   CanonDir,
   Result,
   GameStateError,
+  LevelStatus,
 } from "./types.ts";
+import { tryCatch } from "./types.ts";
 import { LevelInitializationError, InvalidGameStateError } from "./error.ts";
 import { normalizeDirectionInput, buildExits } from "./directions.ts";
 import { CANON_DIRS, inferNodeCoordinates } from "./directions.ts";
 
-// TODO: Move gameOver check to end of command dispatch, clear screen once there.
+type GameStateInsert = InferInsertModel<typeof gameStates>;
+
+/**
+ * Saves the user's current game state to the database.
+ * @param {number} userId - The ID of the user.
+ * @param {GameState} gameState - The current game state object.
+ * @returns {Promise<void>}
+ */
+export async function saveGameState(
+  userId: number,
+  gameState: GameState,
+): Promise<void> {
+  // Convert Maps to plain objects
+  const inventoryObject = Object.fromEntries(gameState.inventory);
+
+  // Convert LevelNode Map (with exits) to a plain object
+  const playerLevelObject: Record<string, any> = {};
+  for (const [key, node] of gameState.playerLevel.entries()) {
+    playerLevelObject[key] = {
+      name: node.name,
+      x: node.x,
+      y: node.y,
+      size: node.size,
+      item: node.item,
+      boss: node.boss,
+      exits: Object.fromEntries(node.exits), // ← 🔥 key fix
+    };
+  }
+
+  const gameStateToSave: GameStateInsert = {
+    userId: userId,
+    currentNode: gameState.currentNode,
+    inventory: inventoryObject,
+    updateMessage: gameState.updateMessage,
+    itemAcquiredFlag: gameState.itemAcquiredFlag,
+    gameOver: gameState.gameOver ? new Date() : null,
+    playerLevelData: playerLevelObject,
+    gamePhase: gameState.gamePhase,
+    levelId: gameState.level_num,
+    complete_msg: gameState.complete_msg,
+    storyline: gameState.storyline,
+  };
+
+  // Save or update in DB
+  await tryCatch(
+    db
+      .insert(gameStates)
+      .values(gameStateToSave)
+      .onConflictDoUpdate({
+        target: gameStates.userId,
+        set: {
+          currentNode: gameStateToSave.currentNode,
+          inventory: gameStateToSave.inventory,
+          updateMessage: gameStateToSave.updateMessage,
+          itemAcquiredFlag: gameStateToSave.itemAcquiredFlag,
+          gameOver: gameStateToSave.gameOver,
+          playerLevelData: gameStateToSave.playerLevelData,
+          gamePhase: gameStateToSave.gamePhase,
+          lastPlayedAt: new Date(),
+        },
+      }),
+  );
+
+  // if (saveResult.error) {
+  //   console.error("Failed to save game state:", saveResult.error);
+  // } else {
+  //   console.log(`Game state for user ${userId} saved successfully.`);
+  // }
+}
 
 /**
  * Creates and initializes a new GameState object for a player.
- * @returns A new GameState instance.
- * @TODO: this will eventually pull selected data from DB
+ * @param {string} levelName - The name of the level to load.
+ * @returns {Promise<Result<GameState, GameStateError>>} A Result type containing a new GameState instance or an error.
  */
-export function createNewGameState(): Result<GameState, GameStateError> {
-  // Define the initial Yugi structure.
-  const initialCastle: Level = new Map<string, LevelNode>();
+export async function createNewGameState(
+  levelName: string,
+): Promise<Result<GameState, GameStateError>> {
+  let initialLevelData: {
+    level_number: number;
+    name: string;
+    storyline: string;
+    mapData: string;
+    complete_msg: string;
+  };
+  let playerLevel: Level;
+  let startingNode: string;
 
-  initialCastle.set("Barbican", {
-    name: "Barbican",
-    exits: buildExits(
-      new Map<CanonDir, string>([
-        ["east", "Kitchen"],
-        ["south", "Gathering Hall"],
-        ["west", "Outer Ward"],
-      ]),
-    ),
-  });
-  initialCastle.set("Kitchen", {
-    name: "Kitchen",
-    exits: buildExits(new Map<CanonDir, string>([["west", "Barbican"]])),
-    item: "Right Leg Of The Forbidden One",
-  });
-  initialCastle.set("Gathering Hall", {
-    name: "Gathering Hall",
-    exits: buildExits(
-      new Map<CanonDir, string>([
-        ["north", "Barbican"],
-        ["east", "Keep"],
-      ]),
-    ),
-    item: "Left Arm Of The Forbidden One",
-  });
-  initialCastle.set("Keep", {
-    name: "Keep",
-    exits: buildExits(new Map<CanonDir, string>([["west", "Gathering Hall"]])),
-    item: "Millennium Puzzle Necklace",
-  });
-  initialCastle.set("Outer Ward", {
-    name: "Outer Ward",
-    exits: buildExits(
-      new Map<CanonDir, string>([
-        ["east", "Barbican"],
-        ["south", "Dungeons"],
-        ["west", "Stables"],
-      ]),
-    ),
-    item: "Right Arm Of The Forbidden One",
-  });
-  initialCastle.set("Dungeons", {
-    name: "Dungeons",
-    exits: buildExits(
-      new Map<CanonDir, string>([
-        ["north", "Outer Ward"],
-        ["south", "Catacombs"],
-      ]),
-    ),
-    item: "Head Of Exodia",
-  });
-  initialCastle.set("Catacombs", {
-    name: "Catacombs",
-    exits: buildExits(new Map<CanonDir, string>([["north", "Dungeons"]])),
-    boss: "Necross",
-    item: "Your physical body",
-  });
-  initialCastle.set("Stables", {
-    name: "Stables",
-    exits: buildExits(new Map<CanonDir, string>([["east", "Outer Ward"]])),
-    item: "Left Leg Of The Forbidden One",
-  });
-  initialCastle.set("Exit", { name: "Exit", exits: new Map() });
+  const levelQueryResult = await tryCatch(
+    db
+      .select({
+        level_number: levels.id,
+        name: levels.name,
+        storyline: levels.storyline,
+        mapData: levels.mapData,
+        complete_msg: levels.complete_msg,
+      })
+      .from(levels)
+      .where(eq(levels.name, levelName)),
+  );
 
-  // Deep copy the initialCastle for this player's specific game state.
-  const playerCastle: Level = new Map<string, LevelNode>();
-  initialCastle.forEach((node, name) => {
-    playerCastle.set(name, {
-      ...node,
-      exits: new Map(node.exits), // Deep copy the exits Map
-    });
-  });
-  let startingNode: string = "Barbican";
+  // Failure: Database query failed.
+  if (levelQueryResult.error) {
+    return {
+      data: null,
+      error: new Error("Failed to query database for level data."),
+    };
+  }
 
-  // Validate starting node
-  if (!playerCastle.has(startingNode)) {
+  if (levelQueryResult.data.length > 0) {
+    // Success: Level found in DB, use it.
+    const levelDataFromDb = levelQueryResult.data[0];
+
+    if (!levelDataFromDb.mapData || !levelDataFromDb.storyline) {
+      return {
+        data: null,
+        error: new LevelInitializationError(
+          "Level data from database is corrupt: mapData or storyline is missing or null.",
+        ),
+      };
+    }
+
+    initialLevelData = {
+      level_number: levelDataFromDb.level_number,
+      name: levelDataFromDb.name,
+      storyline: levelDataFromDb.storyline,
+      mapData: levelDataFromDb.mapData,
+      complete_msg: levelDataFromDb.complete_msg,
+    };
+
+    let parsedMap: Record<string, LevelNode>;
+    try {
+      // Correctly using a standard try/catch for the synchronous JSON.parse
+      parsedMap = JSON.parse(initialLevelData.mapData) as Record<
+        string,
+        LevelNode
+      >;
+    } catch (error) {
+      return {
+        data: null,
+        error: new LevelInitializationError(
+          "Failed to parse map data from database.",
+        ),
+      };
+    }
+
+    startingNode = Object.keys(parsedMap)[0];
+
+    playerLevel = new Map<string, LevelNode>();
+
+    for (const [key, _node] of Object.entries(parsedMap)) {
+      if (Object.prototype.hasOwnProperty.call(parsedMap, key)) {
+        const parsedNode = parsedMap[key];
+
+        const exitsMap = new Map<CanonDir, string>();
+        if (parsedNode.exits) {
+          for (const [exitKey, destinationId] of Object.entries(
+            parsedNode.exits,
+          )) {
+            exitsMap.set(exitKey as CanonDir, destinationId as string);
+          }
+        }
+
+        const expandedExits = buildExits(exitsMap);
+
+        const node: LevelNode = {
+          name: parsedNode.name,
+          exits: expandedExits,
+          item: parsedNode.item,
+          boss: parsedNode.boss,
+          size: parsedNode.size,
+        };
+        playerLevel.set(key, node);
+      }
+    }
+
+    // Now that all nodes are processed, we can infer coordinates on the complete map.
+    const unplacedNodes = inferNodeCoordinates(playerLevel, startingNode);
+
+    // We do this check because we don't care about the Exit node...
+    const hasOtherUnplacedNodes = Array.from(unplacedNodes).some(
+      (nodeName) => nodeName !== "Exit",
+    );
+
+    if (unplacedNodes.size > 0 && hasOtherUnplacedNodes) {
+      console.warn(
+        `The following nodes were not connected to '${startingNode}' and had no coordinates inferred:`,
+        Array.from(unplacedNodes),
+      );
+    } else {
+      console.log(
+        "All connected nodes have had their coordinates inferred successfully.",
+      );
+    }
+  } else {
+    // Failure: Level not found.
+    return {
+      data: null,
+      error: new LevelInitializationError(
+        `Level "${levelName}" not found and no default is available.`,
+      ),
+    };
+  }
+
+  if (!playerLevel.has(startingNode)) {
     return {
       data: null,
       error: new LevelInitializationError(
@@ -124,35 +253,19 @@ export function createNewGameState(): Result<GameState, GameStateError> {
     };
   }
 
-  // Infer and pin the coordinates
-  const unplacedNodes = inferNodeCoordinates(playerCastle, startingNode);
-
-  // We do this check because we don't care about the Exit node...
-  const hasOtherUnplacedNodes = Array.from(unplacedNodes).some(
-    (nodeName) => nodeName !== "Exit",
-  );
-
-  if (unplacedNodes.size > 0 && hasOtherUnplacedNodes) {
-    console.warn(
-      `The following nodes were not connected to '${startingNode}' and had no coordinates inferred:`,
-      Array.from(unplacedNodes),
-    );
-  } else {
-    console.log(
-      "All connected nodes have had their coordinates inferred successfully.",
-    );
-  }
-
+  // Success: Return a success object with only the data.
   return {
     data: {
+      level_num: initialLevelData.level_number,
       currentNode: startingNode,
+      playerLevel: playerLevel,
       inventory: new Map<string, number>(),
-      updateMessage:
-        "Welcome to the Shadow Castle! Find your loot and beat Necross!",
+      updateMessage: initialLevelData.storyline,
       itemAcquiredFlag: 0,
       gameOver: false,
-      playerLevel: playerCastle,
       gamePhase: "intro",
+      complete_msg: initialLevelData.complete_msg,
+      storyline: initialLevelData.storyline,
     },
     error: null,
   };
@@ -165,42 +278,42 @@ export function createNewGameState(): Result<GameState, GameStateError> {
  *
  * @returns The formatted string to be displayed.
  */
-export function getIntro(): string {
-  let output = "";
+// export function getIntro(): string {
+//   let output = "";
 
-  output += "\n";
-  output += "STORYLINE\n";
-  output += `${"-".repeat(27)}\n`;
-  output +=
-    "Yugi has been banished to the Shadow Realm. Kaiba partnered with\n";
-  output +=
-    "the evil Maximillion Pegasus and was given the “Soul Prison” card\n";
-  output += "to trap Yugi during their last duel. Luckily, Yugi had on his\n";
-  output +=
-    "Millennium Puzzle necklace with him when he was trapped, so Yami\n";
-  output +=
-    "is there in spirit, guiding Yugi on how to get out of the Shadow Realm.\n";
-  output += "Bad news, the necklace fell off when Yugi was banished. Yami's\n";
-  output += "instructions are simple, gather for Exodia and the necklace to\n";
-  output +=
-    "break out of the Shadow Realm. However, beware of Necross, the zombie\n";
-  output +=
-    "guardian of the Shadow Realm. Your mission is daunting, break into\n";
-  output +=
-    "the Castle of Necross’ and find the Exodia the Forbidden One (Head \n";
-  output +=
-    "of Exodia), Right Arm of The Forbidden One, Left Arm of the Forbidden\n";
-  output +=
-    "One, Right Leg of the Forbidden One, Left Leg of the Forbidden One,\n";
-  output +=
-    "and the Millennium Puzzle all while avoiding Necross! Once you have\n";
-  output +=
-    "all the cards and your necklace, find and defeat Necross to exit the\n";
-  output += "Shadow Realm!\n\n";
-  output += "Press enter to continue to instructions.";
+//   output += "\n";
+//   output += "STORYLINE\n";
+//   output += `${"-".repeat(27)}\n`;
+//   output +=
+//     "Yugi has been banished to the Shadow Realm. Kaiba partnered with\n";
+//   output +=
+//     "the evil Maximillion Pegasus and was given the “Soul Prison” card\n";
+//   output += "to trap Yugi during their last duel. Luckily, Yugi had on his\n";
+//   output +=
+//     "Millennium Puzzle necklace with him when he was trapped, so Yami\n";
+//   output +=
+//     "is tgamePhase: savedGameState.gamePhase,here in spirit, guiding Yugi on how to get out of the Shadow Realm.\n";
+//   output += "Bad news, the necklace fell off when Yugi was banished. Yami's\n";
+//   output += "instructions are simple, gather for Exodia and the necklace to\n";
+//   output +=
+//     "break out of the Shadow Realm. However, beware of Necross, the zombie\n";
+//   output +=
+//     "guardian of the Shadow Realm. Your mission is daunting, break into\n";
+//   output +=
+//     "the Castle of Necross’ and find the Exodia the Forbidden One (Head \n";
+//   output +=
+//     "of Exodia), Right Arm of The Forbidden One, Left Arm of the Forbidden\n";
+//   output +=
+//     "One, Right Leg of the Forbidden One, Left Leg of the Forbidden One,\n";
+//   output +=
+//     "and the Millennium Puzzle all while avoiding Necross! Once you have\n";
+//   output +=
+//     "all the cards and your necklace, find and defeat Necross to exit the\n";
+//   output += "Shadow Realm!\n\n";
+//   output += "Press enter to continue to instructions.";
 
-  return output;
-}
+//   return output;
+// }
 
 /**
  * Generates the game instructions and general help message.
@@ -212,30 +325,30 @@ export function getIntro(): string {
  * @param state The current GameState object
  * @returns The formatted string containing game instructions and command list.
  */
-export function getHelp(state: GameState): string {
-  let output = "";
+// export function getHelp(state: GameState): string {
+//   let output = "";
 
-  output += "\n";
-  output += "INSTRUCTIONS\n";
-  output += `${"-".repeat(27)}\n`;
-  output += "To move around the castle type:\n";
-  output +=
-    "\tmove ____ or go ____ (replace ____ with cardinal direction).\n\n";
-  output += "To pick up items type:\n";
-  output +=
-    "\tget ____ (replace ____ with the full item name including spaces).\n\n";
-  output += "To show the rules type:\n";
-  output += "\thelp\n\n";
-  output += "To quit type:\n";
-  output += "\tquit or exit\n\n";
-  output += "The commands aren't case sensitive so don't worry about that!\n";
-  output +=
-    state.gamePhase === "intro" || state.gamePhase === "instruct"
-      ? "Press enter to start the game!"
-      : "Press enter to return to the game!";
+//   output += "\n";
+//   output += "INSTRUCTIONS\n";
+//   output += `${"-".repeat(27)}\n`;
+//   output += "To move around the castle type:\n";
+//   output +=
+//     "\tmove ____ or go ____ (replace ____ with cardinal direction).\n\n";
+//   output += "To pick up items type:\n";
+//   output +=
+//     "\tget ____ (replace ____ with the full item name including spaces).\n\n";
+//   output += "To show the rules type:\n";
+//   output += "\thelp\n\n";
+//   output += "To quit type:\n";
+//   output += "\tquit or exit\n\n";
+//   output += "The commands aren't case sensitive so don't worry about that!\n";
+//   output +=
+//     state.gamePhase === "intro" || state.gamePhase === "instruct"
+//       ? "Press enter to start the game!"
+//       : "Press enter to return to the game!";
 
-  return output;
-}
+//   return output;
+// }
 
 /**
  * Generates status display for the player.
@@ -297,9 +410,6 @@ export function showStatus(state: GameState): Result<string, GameStateError> {
       possibleMovements = `You can move ${directions.toLowerCase()}.`;
     }
 
-    // I don't feel like changing the format, so just make a list
-    // Maybe eventually JSON.stringify(Object.fromEntries(state.inventory))
-    // Then fix the : 1s?
     let inventoryItems: string[] = [];
     state.inventory.forEach((quantity, itemName) => {
       inventoryItems.push(
@@ -309,6 +419,7 @@ export function showStatus(state: GameState): Result<string, GameStateError> {
 
     inventoryMsg = `Inventory: [${inventoryItems.join(", ")}]`;
 
+    // Clean up formatting when you get an item
     if (currentRoomNode.item) {
       const newItem = currentRoomNode.item;
       if (!state.inventory.has(newItem)) {
@@ -317,14 +428,18 @@ export function showStatus(state: GameState): Result<string, GameStateError> {
         } else {
           itemStatus = `${newItem} is on the ground! To pick it up, type 'get ${newItem.toLowerCase()}'!`;
         }
+      } else {
+        // Player already has the item, nothing on the ground
+        itemStatus = "Nothing is on the ground!";
       }
     } else {
-      if (state.itemAcquiredFlag === 1) {
-        itemStatus = state.updateMessage;
-        state.updateMessage = ""; // Reset updateMessage after showing
-        state.itemAcquiredFlag = 0;
-      } else {
-        itemStatus = "Nothing is on the ground!";
+      itemStatus =
+        state.updateMessage !== ""
+          ? state.updateMessage
+          : "Nothing is on the ground!";
+
+      if (state.updateMessage !== "") {
+        state.updateMessage = "";
       }
     }
   }
@@ -409,16 +524,9 @@ export function pickup(state: GameState, groundItem: string): void {
     if (!state.inventory.has(itemInRoom)) {
       state.inventory.set(itemInRoom, 1);
       delete currentRoomNode.item;
-      state.itemAcquiredFlag = 1;
+      //state.itemAcquiredFlag = 1;
       state.updateMessage = `You have obtained ${itemInRoom}!`;
     } else {
-      // Potentially add stacking here rather easily now?
-      // If you want to allow stacking:
-      // const currentQuantity = state.inventory.get(itemInRoom) || 0;
-      // state.inventory.set(itemInRoom, currentQuantity + 1);
-      // delete currentRoomNode.item;
-      // state.itemAcquiredFlag = 1;
-      // state.updateMessage = `You obtained another ${itemInRoom}!`;
       state.updateMessage = "You already have this.";
     }
   } else {
@@ -427,36 +535,141 @@ export function pickup(state: GameState, groundItem: string): void {
 }
 
 /**
- * Checks game over conditions and updates the GameState.
- * @param state The current GameState object.
+ * Checks to ensure all items are collected, if they are
+ * you beat the boss.
+ * @returns True if no items in node, false if there are
+ *          still items in nodes
  */
-export function checkGameOver(state: GameState): void {
+function allItemsPickedUp(state: GameState): boolean {
+  for (const room of state.playerLevel.values()) {
+    if (room.boss) continue;
+    if (room.item !== undefined && room.item !== null) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
+function checkLevelBeat(state: GameState): Result<LevelStatus, Error> {
+  // We init our levelStatus
+  const levelStatus: LevelStatus = {
+    boss: false,
+    level_beat: false,
+  };
+
   const currentRoomNode = state.playerLevel.get(state.currentNode);
 
   // Not important now since level is hardcoded, but will be useful
   // when we added loadable levels.
   if (!currentRoomNode) {
     state.updateMessage = "Err: Current room not found.";
+    return {
+      data: null,
+      error: new InvalidGameStateError(
+        "Level data from database is corrupt: mapData or storyline is missing or null.",
+      ),
+    };
+  }
+
+  // Check if we beat boss or die
+  if (currentRoomNode.boss) {
+    if (allItemsPickedUp(state)) {
+      //state.updateMessage = "You beat the boss!";
+      levelStatus.boss = true;
+      levelStatus.level_beat = true;
+      return {
+        data: levelStatus,
+        error: null,
+      };
+    } else {
+      //state.updateMessage = "The boss beat you!";
+      levelStatus.boss = true;
+      levelStatus.level_beat = false;
+      return {
+        data: levelStatus,
+        error: null,
+      };
+    }
+  }
+
+  return {
+    data: levelStatus,
+    error: null,
+  };
+}
+
+/**
+ * Checks game over conditions and updates the GameState.
+ * @param state The current GameState object.
+ *
+ */
+export async function checkGameOver(state: GameState): Promise<void> {
+  // Get level status first, boss beat etc
+  let levelReport;
+
+  try {
+    levelReport = checkLevelBeat(state);
+    // console.log("Level Report:", levelReport);
+  } catch (err) {
+    console.error("checkLevelBeat threw an exception:", err);
+    state.updateMessage =
+      "Critical error occurred while checking level status.";
+    state.gameOver = true;
     return;
   }
 
-  if (state.currentNode === "Exit") {
-    state.updateMessage = "Thanks for playing! Hope you enjoyed it!";
+  if (levelReport.error) {
+    // Game errored, end game and force a restart
+    console.error("Game state error:", levelReport.error.message);
+    state.updateMessage = `Critical error: ${levelReport.error.message}`;
     state.gameOver = true;
+    return;
   }
 
-  if (currentRoomNode.boss) {
-    if (state.inventory.size < 6) {
+  if (levelReport.data) {
+    const levelStatus = levelReport.data;
+
+    if (levelStatus.level_beat === true) {
+      // First Scenario: We beat the level! Is there another level?
+      const nextLevelId = state.level_num + 1;
+
+      // try to pull levelId + 1
+      const levelQueryResult = await tryCatch(
+        db
+          .select({ name: levels.name })
+          .from(levels)
+          .where(eq(levels.id, nextLevelId)),
+      );
+
+      // Check for a database query error first.
+      if (levelQueryResult.error) {
+        console.error(
+          "Database query failed for next level:",
+          levelQueryResult.error.message,
+        );
+        state.updateMessage = "An error occurred while loading the next level.";
+        state.gameOver = true;
+        return;
+      }
+
+      // Now, confidently check if the data exists.
+      if (levelQueryResult.data.length === 0) {
+        // Game Over - no additional levels!
+        state.updateMessage =
+          "You have completed the entire game! Congratulations!";
+        state.gameOver = true;
+        return;
+      }
+
       state.updateMessage =
-        "You have been defeated by Necross! You didn't have all the Exodia " +
-        "pieces and the necklace! You're stuck in the Shadow Realm!\n " +
-        "Thank you for playing! Hope you enjoyed it!";
-    } else {
-      state.updateMessage =
-        "You used your necklace and Exodia pieces to beat Necross and exit " +
-        "the Shadow Realm! Make sure Kaiba and Pegasus pay for this!\n " +
-        "Thank you for playing! Hope you enjoyed it!";
+        state.complete_msg + "\n Press Enter to proceed to the next level!";
+      state.gamePhase = "level_complete";
+    } else if (levelStatus.boss === true && levelStatus.level_beat === false) {
+      // Second Scenario: You fought the boss and lost - game over
+      state.updateMessage = "You lost, try again!";
+      state.gameOver = true;
     }
-    state.gameOver = true;
+    // Do nothing - level is still ongoing
   }
 }

@@ -2,8 +2,8 @@
   "compilerOptions": {
     "target": "esnext",
     "module": "nodenext",
-    "outDir": "./server/dist",
-    "rootDir": "./server",
+    "outDir": "./dist",
+    "rootDir": "./",
     "strict": true,
     "esModuleInterop": true,
     "forceConsistentCasingInFileNames": true,
@@ -20,11 +20,10 @@
     ]
   },
   "include": [
-    "server/**/*.ts"
+    "./**/*.ts"
   ],
   "exclude": [
     "node_modules",
-    "**/*.spec.ts",
-    "client"
+    "**/*.spec.ts"
   ]
 }

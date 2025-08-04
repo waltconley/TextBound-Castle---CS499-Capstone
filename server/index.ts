@@ -4,7 +4,9 @@
  * with client via WebSockets.
  * @author Walter Conley
  * @date July 17, 2025
- * @version 1.0.0
+ * @date August 1, 2025 - Added authentication phase logic
+ * @date August 3, 2025 - Transitioned to HTTPS and WSS
+ * @version 1.0.1
  */
 
 import expressPkg from "express";
@@ -12,20 +14,24 @@ import { WebSocket, WebSocketServer } from "ws";
 import path from "path";
 import { fileURLToPath } from "url";
 import fs from "fs";
-import * as http from "http";
+import * as https from "https";
+import * as http from "http"; // Still need this for IncomingMessage
 
 // Import game logic/interfaces
-import type { GameState, Result, GameStateError } from "./types.ts";
-import { createNewGameState, getIntro } from "./game.ts";
+import type { GameState, ConnectionState } from "./types.ts";
 
 // Start working with our game logic
 import { handleCommand as importedHandleCommand } from "./commands.ts";
+import { handleAuthCommand as importedAuthCommand } from "./auth_commands.ts";
+
+// Map of all connected guests and their states
+const connectionStates = new Map<WebSocket, ConnectionState>();
 
 // Map GameState to websocket connection
 const connectedClientGameStates = new Map<WebSocket, GameState>();
 
 // Explicitly type the signature of the 'handleCommand' function
-const handleCommand: typeof importedHandleCommand = importedHandleCommand;
+const handleAuthCommand: typeof importedAuthCommand = importedAuthCommand;
 
 // Reconstructing filename and dirname for ES modules
 const __filename = fileURLToPath(import.meta.url);
@@ -35,14 +41,13 @@ const __dirname = path.dirname(__filename);
 const express = expressPkg;
 const app = express();
 const port = 3000;
-const wsPort = 3001; // Separate port for WebSocket server
+//const wsPort = 3001; // Separate port for WebSocket server
 
 // Set up some ergos to deliver the correct content
-const clientPath: string = path.join(__dirname, "..", "..", "client", "dist");
+const clientPath: string = path.join(__dirname, "..", "client", "dist");
 // If no prod var and client build doesn't exist, serve this instead
 const devWarningHTML: string = path.join(
   __dirname,
-  "..",
   "..",
   "client",
   "dev-warning.html",
@@ -84,69 +89,93 @@ Please create 'client/dev-warning.html' or run 'parcel build' first.
   }
 }
 
-const wss = new WebSocketServer({ port: wsPort });
+const options = {
+  key: fs.readFileSync(path.join(__dirname, "..", "server.key")),
+  cert: fs.readFileSync(path.join(__dirname, "..", "server.crt")),
+};
+
+//const wss = new WebSocketServer({ port: wsPort });
+
+const server = https.createServer(options, app);
+
+const wss = new WebSocketServer({ server });
 
 wss.on("connection", (ws: WebSocket, req: http.IncomingMessage) => {
   // Get IP
   const clientIp = req.socket.remoteAddress;
 
-  console.log(`Client (${clientIp}) connected to WebSocket`);
+  console.log(`Client (${clientIp}) connected to WebSocket Server`);
 
-  const createGameStateResult: Result<GameState, GameStateError> =
-    createNewGameState();
+  // Initial state upon connection
+  connectionStates.set(ws, { state: "guest" });
 
-  if (createGameStateResult.error) {
-    // If GameState creation fails, log it and inform the client.
-    console.error(
-      `Failed to create GameState for client ${clientIp}:`,
-      createGameStateResult.error.message,
-    );
-    ws.send(
-      `Server error: Unable to start game due to an internal issue. Please try again later.\r\n`,
-    );
-    ws.close(); // Close the connection as the game cannot proceed
-    return; // Stop execution for this connection
-  }
-
-  // If there's no error, extract the GameState object from the Result
-  const clientGameState: GameState = createGameStateResult.data;
-  connectedClientGameStates.set(ws, clientGameState);
-
-  const introText = getIntro();
-  ws.send(introText);
+  ws.send(
+    JSON.stringify({
+      type: "auth_prompt",
+      message:
+        "Welcome to TextBound Castle Crawl. Please type 'register' or 'login'",
+    }),
+  );
 
   // Handle commands from the client
   ws.on("message", async (message) => {
-    // Make this callback async
-    const command = message.toString(); // Don't trim here, handle in handleCommand
+    const incomingMessage = message.toString().trim();
 
-    try {
-      // Try to retrieve existing gameState for IP
-      const gameState = connectedClientGameStates.get(ws);
+    const connectionState = connectionStates.get(ws);
 
-      if (!gameState) {
-        console.error(
-          `No gameState found for client ${clientIp}. Closing connection.`,
-        );
-        ws.send(
-          "Server error: Your game state could not be found. Please reconnect.\r\n",
-        );
-        ws.close();
-        return;
-      }
-
-      const result = await handleCommand(command, ws, gameState); // Process user input
-
-      ws.send(result.output);
-
-      if (result.shouldCloseWs) {
-        ws.close();
-      }
-    } catch (error) {
-      console.error("Error handling command:", error);
+    if (!connectionState) {
       ws.send(
-        `Server error: ${error instanceof Error ? error.message : "Unknown error"}\r\n`,
+        JSON.stringify({
+          type: "error",
+          message: "Server error: Invalid connection state.",
+        }),
       );
+      return;
+    }
+
+    // Check if the user is in an authentication-related state.
+    // If so, delegate the command to the authentication handler.
+    if (
+      connectionState.state === "guest" ||
+      connectionState.state === "register" ||
+      connectionState.state === "login" ||
+      connectionState.state === "authenticated"
+    ) {
+      await handleAuthCommand(
+        ws,
+        connectionState,
+        incomingMessage,
+        connectionStates,
+      );
+      return;
+    }
+
+    // Handle game-related commands.
+    switch (connectionState.state) {
+      case "game_session":
+        const { gameState, user } = connectionState;
+        // Use the imported handleCommand with the new name
+        const result = await importedHandleCommand(
+          incomingMessage,
+          ws,
+          gameState,
+          user.id,
+          user.username,
+        );
+        ws.send(result.output);
+
+        if (result.shouldCloseWs) {
+          ws.close();
+        }
+        break;
+
+      default:
+        ws.send(
+          JSON.stringify({
+            type: "error",
+            message: "Server error: Invalid connection state.",
+          }),
+        );
     }
   });
 
@@ -161,9 +190,9 @@ wss.on("connection", (ws: WebSocket, req: http.IncomingMessage) => {
   });
 });
 
-app.listen(port, () => {
+server.listen(port, () => {
   console.log(
-    `Express server running and serving frontend at http://localhost:${port}`,
+    `Express server running and serving frontend at https://localhost:${port}`,
   );
-  console.log(`WebSocket server running at ws://localhost:${wsPort}`);
+  console.log(`WebSocket server running at wss://localhost:${port}`);
 });

@@ -1,34 +1,31 @@
 {
-  "name": "project",
+  "name": "new_project_root",
   "version": "1.0.0",
-  "keywords": [],
-  "author": "Walter Conley",
+  "description": "Root project for TextBound Castle Crawl",
   "type": "module",
   "scripts": {
-    "test": "echo \"No tests specified for now.\" && exit 0",
-    "build:frontend": "parcel build client/index.html --dist-dir client/dist",
-    "start:frontend-dev": "parcel serve client/index.html --open --port 1234",
-    "build:backend": "npx tsc --project tsconfig.server.json",
-    "start:backend-prod": "node server/dist/index.js",
-    "start:backend-dev": "node --enable-source-maps --watch server/index.ts --disable-warning=ExperimentalWarning",
+    "test": "echo \"No root tests specified.\" && exit 0",
+    "install:all": "npm install --prefix server && npm install --prefix client",
+    "build": "npm-run-all build:frontend build:backend",
+    "build:frontend": "npm --prefix client run build",
+    "build:backend": "npm --prefix server run build",
     "dev": "npm run build:frontend && npm-run-all --parallel start:frontend-dev start:backend-dev",
-    "start": "npm run build:frontend && npm run build:backend && npm run start:backend-prod",
-    "check-types": "npx tsc --noEmit --project tsconfig.json && npx tsc --noEmit --project tsconfig.server.json"
-  },
-  "description": "",
-  "dependencies": {
-    "@xterm/addon-fit": "^0.10.0",
-    "@xterm/xterm": "^5.5.0",
-    "express": "^5.1.0",
-    "ws": "^8.18.3"
+    "start": "npm run build && npm run start:backend-prod",
+    "start:frontend-dev": "npm --prefix client run start",
+    "start:backend-dev": "npm --prefix server run dev",
+    "start:backend-prod": "npm --prefix server run start",
+    "check-types": "npm-run-all --parallel check-types:client check-types:server",
+    "check-types:client": "npm --prefix client run check-types",
+    "check-types:server": "npm --prefix server run check-types",
+    "db:generate": "npm --prefix server run db:generate",
+    "db:migrate": "npm --prefix server run db:migrate",
+    "db:push": "npm --prefix server run db:push",
+    "db:studio": "npm --prefix server run db:studio"
   },
   "devDependencies": {
-    "@types/ws": "^8.18.1",
-    "@types/express": "^5.0.3",
-    "@types/node": "^24.0.13",
-    "typescript": "^5.8.3",
-    "parcel": "^2.15.4",
     "npm-run-all": "^4.1.5"
   },
-  "engine": "node>=23.6.0"
+  "engine": "node>=23.6.0",
+  "author": "Walter Conley",
+  "license": "ISC"
 }

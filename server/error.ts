@@ -8,13 +8,14 @@
  * @date July 25, 2025 - Added basic errors and grouped in types.ts w/ unions
  * @version 1.0.0
  */
-
 export class PathfindingError extends Error {
-  constructor(
-    message: string,
-    public readonly name: string = "PathfindingError",
-  ) {
+  // Explicitly declare the property here
+  public readonly name: string;
+
+  constructor(message: string, name: string = "PathfindingError") {
     super(message);
+    // Manually assign the property inside the constructor
+    this.name = name;
     Object.setPrototypeOf(this, PathfindingError.prototype);
   }
 }
@@ -22,21 +23,30 @@ export class PathfindingError extends Error {
 export class StartOrEndNodeNotFoundError extends PathfindingError {
   constructor(message: string) {
     super(message, "StartOrEndNodeNotFoundError");
-    Object.setPrototypeOf(this, StartOrEndNodeNotFoundError.prototype);
   }
 }
 
 export class NoPathFoundError extends PathfindingError {
   constructor(message: string) {
     super(message, "NoPathFoundError");
-    Object.setPrototypeOf(this, NoPathFoundError.prototype);
   }
 }
 
 export class InternalGraphConsistencyError extends PathfindingError {
   constructor(message: string) {
     super(message, "InternalGraphConsistencyError");
-    Object.setPrototypeOf(this, InternalGraphConsistencyError.prototype);
+  }
+}
+
+/**
+ * Custom error class for issues related to user authentication, such as
+ * incorrect login credentials or invalid session data.
+ */
+export class AuthenticationError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "AuthenticationError";
+    Object.setPrototypeOf(this, AuthenticationError.prototype);
   }
 }
 
