@@ -1,7 +1,12 @@
-# Treat all Python files as documentation/data so they don't count towards the language stats
+# Force all .ts and .tsx files to be counted
+*.ts linguist-detectable=true
+*.tsx linguist-detectable=true
 *.py linguist-vendored
-requirements.txt linguist-documentation
 
-# Explicitly tell it the project is TypeScript
-*.ts linguist-detectable
-*.tsx linguist-detectable
+# 'src' make sure everything in it is counted
+src/** linguist-detectable=true
+
+# noise
+dist/** linguist-vendored
+build/** linguist-vendored
+node_modules/** linguist-vendored
