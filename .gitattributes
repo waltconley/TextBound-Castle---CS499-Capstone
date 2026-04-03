@@ -1,0 +1,7 @@
+# Treat all Python files as documentation/data so they don't count towards the language stats
+*.py linguist-vendored
+requirements.txt linguist-documentation
+
+# Explicitly tell it the project is TypeScript
+*.ts linguist-detectable
+*.tsx linguist-detectable
